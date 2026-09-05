@@ -6,7 +6,7 @@
 #endif
 #define AppName "Quotty"
 #define AppPublisher "Brent"
-#define AppURL "https://github.com/confeden/Quotty"
+#define AppURL "https://github.com/Zircon04/Quotty"
 #define AppExe "quotty.exe"
 
 [Setup]

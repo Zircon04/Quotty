@@ -6,8 +6,8 @@
 
 use serde::Deserialize;
 
-pub const RELEASES_PAGE: &str = "https://github.com/confeden/Quotty/releases/latest";
-const API_URL: &str = "https://api.github.com/repos/confeden/Quotty/releases/latest";
+pub const RELEASES_PAGE: &str = "https://github.com/Zircon04/Quotty/releases/latest";
+const API_URL: &str = "https://api.github.com/repos/Zircon04/Quotty/releases/latest";
 
 /// How long between automatic checks.
 pub const CHECK_EVERY_SECS: u64 = 8 * 3600;
