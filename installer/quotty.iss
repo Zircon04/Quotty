@@ -24,11 +24,14 @@ PrivilegesRequired=lowest
 DefaultDirName={autopf}\{#AppName}
 DefaultGroupName={#AppName}
 DisableProgramGroupPage=yes
-DisableDirPage=auto
+; Match the original wizard: language selection, then the autostart task.
+ShowLanguageDialog=yes
+DisableWelcomePage=yes
+DisableDirPage=yes
 UninstallDisplayIcon={app}\{#AppExe}
 UninstallDisplayName={#AppName} {#AppVersion}
 OutputDir=..\dist
-OutputBaseFilename={#AppName}-Setup-{#AppVersion}
+OutputBaseFilename={#AppName}-Setup
 SetupIconFile=..\assets\quotty.ico
 WizardStyle=modern
 Compression=lzma2/max
@@ -41,6 +44,11 @@ RestartApplications=no
 [Languages]
 Name: "ru"; MessagesFile: "compiler:Languages\Russian.isl"
 Name: "en"; MessagesFile: "compiler:Default.isl"
+
+[LangOptions]
+; Pin the original screenshots' font and layout across compiler versions.
+DialogFontName=Segoe UI
+DialogFontSize=9
 
 [Tasks]
 Name: "autostart"; Description: "{cm:AutoStartTask}"; Flags: unchecked
