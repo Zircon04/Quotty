@@ -2,7 +2,7 @@
 //! strip, opened centred on whichever monitor the user called it from.
 
 use crate::app::App;
-use crate::config::{ActiveMode, HeaderMode};
+use crate::config::{ActiveMode, ExhaustedMode, HeaderMode};
 use crate::providers::Family;
 use crate::shortcuts;
 
@@ -265,6 +265,24 @@ impl App {
             {
                 s.save();
             }
+
+            ui.add_space(4.0);
+            caption(ui, "Исчерпанные квоты (100% лимита)");
+            ui.horizontal(|ui| {
+                ui.spacing_mut().item_spacing.x = 5.0;
+                let mut pick_ex = |ui: &mut egui::Ui, mode: ExhaustedMode, label: &str| {
+                    if ui
+                        .selectable_label(s.exhausted_mode == mode, label)
+                        .clicked()
+                    {
+                        s.exhausted_mode = mode;
+                        s.save();
+                    }
+                };
+                pick_ex(ui, ExhaustedMode::Compact, "Без полосы");
+                pick_ex(ui, ExhaustedMode::Hidden, "Скрыть");
+                pick_ex(ui, ExhaustedMode::Full, "С полосой");
+            });
         });
     }
 
