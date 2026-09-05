@@ -153,6 +153,51 @@ pub(crate) fn set_native_visible(hwnd: isize, visible: bool) {
 #[cfg(not(windows))]
 pub(crate) fn set_native_visible(_hwnd: isize, _visible: bool) {}
 
+#[cfg(windows)]
+fn show_context_menu(hwnd: isize, compact_mode: bool) -> Option<usize> {
+    use windows::core::HSTRING;
+    use windows::Win32::Foundation::{HWND, POINT};
+    use windows::Win32::UI::WindowsAndMessaging::{
+        AppendMenuW, CreatePopupMenu, DestroyMenu, GetCursorPos, SetForegroundWindow,
+        TrackPopupMenu, MF_STRING, TPM_LEFTALIGN, TPM_RETURNCMD, TPM_TOPALIGN,
+    };
+
+    unsafe {
+        let hmenu = CreatePopupMenu().ok()?;
+        let compact_text = if compact_mode {
+            "Обычный режим (с полосами)"
+        } else {
+            "Компактный режим (без полос)"
+        };
+        let _ = AppendMenuW(hmenu, MF_STRING, 1, &HSTRING::from(compact_text));
+        let _ = AppendMenuW(hmenu, MF_STRING, 2, &HSTRING::from("Настройки…"));
+
+        let mut pt = POINT::default();
+        let _ = GetCursorPos(&mut pt);
+        let _ = SetForegroundWindow(HWND(hwnd as *mut _));
+        let cmd = TrackPopupMenu(
+            hmenu,
+            TPM_RETURNCMD | TPM_LEFTALIGN | TPM_TOPALIGN,
+            pt.x,
+            pt.y,
+            0,
+            HWND(hwnd as *mut _),
+            None,
+        );
+        let _ = DestroyMenu(hmenu);
+        if cmd.0 > 0 {
+            Some(cmd.0 as usize)
+        } else {
+            None
+        }
+    }
+}
+
+#[cfg(not(windows))]
+fn show_context_menu(_hwnd: isize, _compact_mode: bool) -> Option<usize> {
+    None
+}
+
 // ---------------------------------------------------------------------------
 // Repaint backstop
 //
@@ -1207,7 +1252,29 @@ impl eframe::App for App {
                     self.dragging = true;
                 }
                 if resp.clicked_by(PointerButton::Secondary) {
-                    self.open_settings(true);
+                    #[cfg(windows)]
+                    {
+                        if let Some(h) = self.hwnd {
+                            if let Some(cmd) = show_context_menu(h, self.settings.compact_mode) {
+                                match cmd {
+                                    1 => {
+                                        self.settings.compact_mode = !self.settings.compact_mode;
+                                        self.settings.save();
+                                    }
+                                    2 => {
+                                        self.open_settings(true);
+                                    }
+                                    _ => {}
+                                }
+                            }
+                        } else {
+                            self.open_settings(true);
+                        }
+                    }
+                    #[cfg(not(windows))]
+                    {
+                        self.open_settings(true);
+                    }
                 }
                 self.draw_strip(ui, anim_t, animate_on);
             });
@@ -1276,9 +1343,11 @@ mod tests {
 }
 
 fn quota_is_compact(settings: &Settings, used_percent: f32, all_exhausted: bool) -> bool {
-    used_percent >= LIMIT_PCT
-        && (settings.exhausted_mode == crate::config::ExhaustedMode::Compact
-            || (settings.exhausted_mode == crate::config::ExhaustedMode::Hidden && all_exhausted))
+    settings.compact_mode
+        || (used_percent >= LIMIT_PCT
+            && (settings.exhausted_mode == crate::config::ExhaustedMode::Compact
+                || (settings.exhausted_mode == crate::config::ExhaustedMode::Hidden
+                    && all_exhausted)))
 }
 
 #[cfg(test)]

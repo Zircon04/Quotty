@@ -283,6 +283,21 @@ impl App {
                 pick_ex(ui, ExhaustedMode::Hidden, "Скрыть");
                 pick_ex(ui, ExhaustedMode::Full, "С полосой");
             });
+
+            ui.add_space(4.0);
+            if ui
+                .checkbox(&mut s.compact_mode, "Компактный режим (без полос)")
+                .changed()
+            {
+                s.save();
+            }
+            ui.label(
+                RichText::new(
+                    "Скрывать графические полосы для всех моделей, оставляя только текст",
+                )
+                .size(10.5)
+                .color(HINT),
+            );
         });
     }
 
