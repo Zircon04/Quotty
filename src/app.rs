@@ -2,6 +2,7 @@
 
 use crate::active;
 use crate::config::{ActiveMode, HeaderMode, Settings};
+use crate::i18n::{tr_format, Language};
 use crate::providers::{self, Family, Snapshot};
 use crate::shortcuts;
 use crate::tray::Tray;
@@ -84,7 +85,7 @@ pub struct App {
     applied_h: f32,
     /// Cached "Resets …" strings, refreshed at most once per second.
     reset_cache: Vec<Option<ResetTime>>,
-    reset_cache_sec: i64,
+    pub(crate) reset_cache_sec: i64,
     /// Throttle for persisting the auto-switched family.
     last_family_save: f64,
     /// Tray menu events, delivered via a handler that also wakes the UI so
@@ -154,7 +155,7 @@ pub(crate) fn set_native_visible(hwnd: isize, visible: bool) {
 pub(crate) fn set_native_visible(_hwnd: isize, _visible: bool) {}
 
 #[cfg(windows)]
-fn show_context_menu(hwnd: isize, compact_mode: bool) -> Option<usize> {
+fn show_context_menu(hwnd: isize, compact_mode: bool, lang: Language) -> Option<usize> {
     use windows::core::HSTRING;
     use windows::Win32::Foundation::{HWND, POINT};
     use windows::Win32::UI::WindowsAndMessaging::{
@@ -165,12 +166,17 @@ fn show_context_menu(hwnd: isize, compact_mode: bool) -> Option<usize> {
     unsafe {
         let hmenu = CreatePopupMenu().ok()?;
         let compact_text = if compact_mode {
-            "Обычный режим (с полосами)"
+            lang.text("Обычный режим (с полосами)", "Normal mode (with bars)")
         } else {
-            "Компактный режим (без полос)"
+            lang.text("Компактный режим (без полос)", "Compact mode (no bars)")
         };
         let _ = AppendMenuW(hmenu, MF_STRING, 1, &HSTRING::from(compact_text));
-        let _ = AppendMenuW(hmenu, MF_STRING, 2, &HSTRING::from("Настройки…"));
+        let _ = AppendMenuW(
+            hmenu,
+            MF_STRING,
+            2,
+            &HSTRING::from(lang.text("Настройки…", "Settings…")),
+        );
 
         let mut pt = POINT::default();
         let _ = GetCursorPos(&mut pt);
@@ -194,7 +200,7 @@ fn show_context_menu(hwnd: isize, compact_mode: bool) -> Option<usize> {
 }
 
 #[cfg(not(windows))]
-fn show_context_menu(_hwnd: isize, _compact_mode: bool) -> Option<usize> {
+fn show_context_menu(_hwnd: isize, _compact_mode: bool, _lang: Language) -> Option<usize> {
     None
 }
 
@@ -283,7 +289,7 @@ impl App {
         spawn_update_checker(shared.clone(), cc.egui_ctx.clone());
 
         let autostart = shortcuts::is_autostart_enabled();
-        let tray = Tray::new(autostart).ok();
+        let tray = Tray::new(autostart, settings.language).ok();
 
         // Route tray menu events through our own channel and wake the UI on each
         // one, so a menu choice is applied immediately instead of on the next
@@ -388,6 +394,7 @@ impl App {
     }
 
     fn draw_strip(&mut self, ui: &mut egui::Ui, anim_t: f64, animate: bool) {
+        let lang = self.settings.language;
         let op = self.settings.opacity;
         let full = ui.max_rect();
         let painter = ui.painter().clone();
@@ -457,7 +464,7 @@ impl App {
         if self.reset_cache_sec != sec || self.reset_cache.len() != all_limits.len() {
             self.reset_cache = all_limits
                 .iter()
-                .map(|l| l.window.map(|w| fmt_reset(w.resets_at, now)))
+                .map(|l| l.window.map(|w| fmt_reset(w.resets_at, now, lang)))
                 .collect();
             self.reset_cache_sec = sec;
         }
@@ -473,7 +480,10 @@ impl App {
                         .get(i)
                         .and_then(|r| r.as_ref())
                         .map(|r| r.badge.clone())
-                        .unwrap_or_else(|| "время сброса неизвестно".to_string());
+                        .unwrap_or_else(|| {
+                            lang.text("время сброса неизвестно", "reset time unknown")
+                                .to_string()
+                        });
                     let name = lim
                         .title
                         .split_whitespace()
@@ -503,22 +513,22 @@ impl App {
         };
         let mut header_right = right - 70.0;
         let (status, status_col, dot) = if !ever && !online {
-            ("загрузка…", dim, false)
+            (lang.text("загрузка…", "loading…"), dim, false)
         } else if online {
             (
-                "онлайн",
+                lang.text("онлайн", "online"),
                 Color32::from_rgba_unmultiplied(120, 205, 150, text_a),
                 true,
             )
         } else if stale {
             (
-                "подключение",
+                lang.text("подключение", "connecting"),
                 Color32::from_rgba_unmultiplied(214, 200, 110, text_a),
                 true,
             )
         } else {
             (
-                "оффлайн",
+                lang.text("оффлайн", "offline"),
                 Color32::from_rgba_unmultiplied(232, 150, 80, text_a),
                 true,
             )
@@ -557,7 +567,7 @@ impl App {
             let prefix = if weekly {
                 "Out of Quota · ".to_string()
             } else {
-                format!("{h_name} сброс: ")
+                tr_format!(lang, "{h_name} сброс: ", "{h_name} resets: ")
             };
             let prefix_g = painter.layout_no_wrap(prefix, badge_font.clone(), badge_color);
             let badge_g = painter.layout_no_wrap(h_badge, badge_font, badge_color);
@@ -630,6 +640,7 @@ impl App {
                     animate,
                     anim_t,
                     i,
+                    lang,
                     self.settings.show_weekly_limits,
                     is_compact,
                 );
@@ -639,7 +650,7 @@ impl App {
             painter.text(
                 Pos2::new(left, y),
                 Align2::LEFT_TOP,
-                "нет данных",
+                lang.text("нет данных", "no data"),
                 FontId::proportional(11.0),
                 dim,
             );
@@ -648,7 +659,7 @@ impl App {
             painter.text(
                 Pos2::new(left, y),
                 Align2::LEFT_TOP,
-                format!("ошибка: {e}"),
+                tr_format!(lang, "ошибка: {e}", "error: {e}"),
                 FontId::proportional(10.5),
                 Color32::from_rgba_unmultiplied(232, 150, 80, text_a),
             );
@@ -656,7 +667,7 @@ impl App {
             painter.text(
                 Pos2::new(left, y),
                 Align2::LEFT_TOP,
-                "загрузка данных…",
+                lang.text("загрузка данных…", "loading data…"),
                 FontId::proportional(11.0),
                 dim,
             );
@@ -666,9 +677,12 @@ impl App {
     /// Announce a pending update on the tray icon, where it can be seen without
     /// opening anything.
     fn sync_tooltip(&mut self) {
+        let lang = self.settings.language;
         let want = match &self.shared.update.lock().unwrap().available {
-            Some(u) => format!(
+            Some(u) => tr_format!(
+                lang,
                 "Quotty {} — доступно обновление {}",
+                "Quotty {} — update {} available",
                 update::current(),
                 u.version
             ),
@@ -804,6 +818,7 @@ fn draw_limit(
     animate: bool,
     anim_t: f64,
     idx: usize,
+    lang: Language,
     show_weekly_limits: bool,
     is_compact: bool,
 ) -> f32 {
@@ -820,7 +835,7 @@ fn draw_limit(
     let title_rect = painter.text(
         Pos2::new(left, y),
         Align2::LEFT_TOP,
-        &lim.title,
+        lang.limit_title(&lim.title),
         FontId::proportional(12.5),
         title_col,
     );
@@ -836,7 +851,8 @@ fn draw_limit(
     }
     if show_weekly_limits && !lim.weekly_exhausted() {
         if let Some(weekly) = &lim.weekly {
-            let badge_str = format!("нед. {:.0}%", weekly.remaining_percent);
+            let badge_str =
+                tr_format!(lang, "нед. {:.0}%", "week {:.0}%", weekly.remaining_percent);
             let badge_font = FontId::proportional(10.0);
             let badge_color = Color32::from_rgba_unmultiplied(214, 150, 74, text_a);
             let badge_g = painter.layout_no_wrap(badge_str.clone(), badge_font, badge_color);
@@ -862,8 +878,12 @@ fn draw_limit(
     }
     let reset_text = match reset {
         Some(r) => r.row.clone(),
-        None if lim.weekly_exhausted() => "время сброса неизвестно".to_string(),
-        None => "окно ещё не начато".to_string(),
+        None if lim.weekly_exhausted() => lang
+            .text("время сброса неизвестно", "reset time unknown")
+            .to_string(),
+        None => lang
+            .text("окно ещё не начато", "window has not started")
+            .to_string(),
     };
     let reset_rect = painter.text(
         Pos2::new(right, y + 1.0),
@@ -1097,7 +1117,7 @@ fn draw_bubbles(
     }
 }
 
-fn fmt_reset(reset: DateTime<Utc>, now: DateTime<Utc>) -> ResetTime {
+fn fmt_reset(reset: DateTime<Utc>, now: DateTime<Utc>, lang: Language) -> ResetTime {
     let local = reset.with_timezone(&Local);
     let abs = local.format("%H:%M").to_string();
     let diff_secs = (reset - now).num_seconds();
@@ -1105,8 +1125,8 @@ fn fmt_reset(reset: DateTime<Utc>, now: DateTime<Utc>) -> ResetTime {
     if diff_secs <= 0 {
         return ResetTime {
             abs: abs.clone(),
-            row: format!("Сброс {abs} · сейчас"),
-            badge: format!("{abs} (сейчас)"),
+            row: tr_format!(lang, "Сброс {abs} · сейчас", "Resets {abs} · now"),
+            badge: tr_format!(lang, "{abs} (сейчас)", "{abs} (now)"),
         };
     }
 
@@ -1118,22 +1138,33 @@ fn fmt_reset(reset: DateTime<Utc>, now: DateTime<Utc>) -> ResetTime {
 
     let (rel_row, rel_badge) = if days > 0 {
         (
-            format!("через {days}д {rem_hours}ч"),
-            format!("{days}д {rem_hours}ч"),
+            tr_format!(
+                lang,
+                "через {days}д {rem_hours}ч",
+                "in {days}d {rem_hours}h"
+            ),
+            tr_format!(lang, "{days}д {rem_hours}ч", "{days}d {rem_hours}h"),
         )
     } else if hours > 0 {
         (
-            format!("через {hours}ч {rem_mins}м"),
-            format!("{hours}ч {rem_mins}м"),
+            tr_format!(
+                lang,
+                "через {hours}ч {rem_mins}м",
+                "in {hours}h {rem_mins}m"
+            ),
+            tr_format!(lang, "{hours}ч {rem_mins}м", "{hours}h {rem_mins}m"),
         )
     } else {
         let m = mins.max(1);
-        (format!("через {m}м"), format!("{m}м"))
+        (
+            tr_format!(lang, "через {m}м", "in {m}m"),
+            tr_format!(lang, "{m}м", "{m}m"),
+        )
     };
 
     ResetTime {
         abs: abs.clone(),
-        row: format!("Сброс {abs} · {rel_row}"),
+        row: tr_format!(lang, "Сброс {abs} · {rel_row}", "Resets {abs} · {rel_row}"),
         badge: format!("{abs} ({rel_badge})"),
     }
 }
@@ -1304,7 +1335,11 @@ impl eframe::App for App {
                     #[cfg(windows)]
                     {
                         if let Some(h) = self.hwnd {
-                            if let Some(cmd) = show_context_menu(h, self.settings.compact_mode) {
+                            if let Some(cmd) = show_context_menu(
+                                h,
+                                self.settings.compact_mode,
+                                self.settings.language,
+                            ) {
                                 match cmd {
                                     1 => {
                                         self.settings.compact_mode = !self.settings.compact_mode;
@@ -1368,8 +1403,22 @@ mod tests {
     #[test]
     fn reset_timer_formatting() {
         let now = Utc::now();
-        let rel_row = |secs: i64| fmt_reset(now + Duration::seconds(secs), now).row;
-        let rel_badge = |secs: i64| fmt_reset(now + Duration::seconds(secs), now).badge;
+        let rel_row = |secs: i64| {
+            fmt_reset(
+                now + Duration::seconds(secs),
+                now,
+                crate::i18n::Language::Russian,
+            )
+            .row
+        };
+        let rel_badge = |secs: i64| {
+            fmt_reset(
+                now + Duration::seconds(secs),
+                now,
+                crate::i18n::Language::Russian,
+            )
+            .badge
+        };
 
         assert!(rel_row(40).ends_with("через 1м"));
         assert!(rel_badge(40).ends_with("(1м)"));
@@ -1435,7 +1484,10 @@ mod weekly_render_tests {
     use super::*;
     #[test]
     fn weekly_lockout_draws_red_status_without_overlapping_text() {
-        for _language in [()] {
+        for language in [
+            crate::i18n::Language::Russian,
+            crate::i18n::Language::English,
+        ] {
             for title in ["Gemini", "Claude / GPT"] {
                 for compact in [false, true] {
                     for show_weekly in [false, true] {
@@ -1453,7 +1505,7 @@ mod weekly_render_tests {
                                 resets_at: Some(now + Duration::days(5)),
                             }),
                         };
-                        let reset = fmt_reset(lim.window.unwrap().resets_at, now);
+                        let reset = fmt_reset(lim.window.unwrap().resets_at, now, language);
                         let ctx = egui::Context::default();
                         let output = ctx.run(egui::RawInput::default(), |ctx| {
                             let painter = ctx.layer_painter(egui::LayerId::background());
@@ -1473,6 +1525,7 @@ mod weekly_render_tests {
                                 false,
                                 0.0,
                                 0,
+                                language,
                                 show_weekly,
                                 compact,
                             );
