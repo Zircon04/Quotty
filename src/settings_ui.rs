@@ -373,6 +373,22 @@ impl App {
                 .size(10.5)
                 .color(HINT),
             );
+
+            ui.add_space(4.0);
+            if ui
+                .checkbox(
+                    &mut s.show_weekly_limits,
+                    "Показывать остаток недельных лимитов",
+                )
+                .changed()
+            {
+                s.save();
+            }
+            ui.label(
+                RichText::new("Отображать бейдж [нед. Х%] рядом с названием модели")
+                    .size(10.5)
+                    .color(HINT),
+            );
         });
     }
 

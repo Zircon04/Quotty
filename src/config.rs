@@ -61,6 +61,7 @@ pub struct Settings {
     pub family: Family,
     /// Verbose, anonymised logging next to the exe. Off unless asked for.
     pub diagnostics: bool,
+    pub show_weekly_limits: bool,
     pub compact_mode: bool,
     pub exhausted_mode: ExhaustedMode,
     pub auto_hide_on_inactive: bool,
@@ -80,6 +81,7 @@ impl Default for Settings {
             active_mode: ActiveMode::Auto,
             family: Family::Claude,
             diagnostics: false,
+            show_weekly_limits: true,
             compact_mode: false,
             exhausted_mode: ExhaustedMode::Compact,
             auto_hide_on_inactive: true,
